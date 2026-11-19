@@ -1,0 +1,4 @@
+[Icon Theme]
+Name=Tendril Invisible
+Comment=Invisible native cursor used by Tendril Cursor KWin effect
+Inherits=breeze_cursors

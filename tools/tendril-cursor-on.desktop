@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=Tendril Cursor On
+Comment=Turn the robotic tendril cursor on
+Exec=$HOME/.local/bin/tendril-cursor on
+Icon=input-mouse
+Terminal=false
+Categories=Settings;
+Keywords=tendril;cursor;mouse;

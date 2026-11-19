@@ -1,0 +1,374 @@
+<meta charset="utf-8">
+<title>Tendril Bench</title>
+<link rel="icon" href="data:,">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<style>
+  :root {
+    color-scheme: dark;
+    --void:#0a0d10; --void-2:#10161b; --panel:#12181d; --panel-2:#172026;
+    --track:#212c33; --edge:#2c3a42; --steel:#5b656e; --text:#c6d0d6;
+    --text-dim:#7e8b93; --accent:#e6a13c; --accent-deep:#5a3c17; --hazard:#f0b429;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { width: 100%; height: 100%; overflow: hidden; }
+  body { background: var(--void); color: var(--text); font-family: "IBM Plex Mono", ui-monospace, Menlo, Consolas, monospace; -webkit-font-smoothing: antialiased; }
+  #stage { position: fixed; inset: 0; width: 100vw; height: 100vh; display: block;
+    background: radial-gradient(1400px 900px at 28% 16%, #141b21 0%, var(--void) 62%), var(--void); cursor: none; }
+  #panel { position: fixed; top: 18px; right: 18px; width: 344px; max-height: calc(100vh - 36px);
+    display: flex; flex-direction: column; background: linear-gradient(180deg, var(--panel) 0%, var(--panel-2) 100%);
+    border: 1px solid var(--edge); border-radius: 12px;
+    box-shadow: 0 24px 60px -20px rgba(0,0,0,0.72), 0 0 0 1px rgba(230,161,60,0.04); z-index: 10; overflow: hidden; }
+  #panel header { display: flex; align-items: baseline; justify-content: space-between; gap: 10px;
+    padding: 14px 16px 12px; border-bottom: 1px solid var(--edge); background: rgba(230,161,60,0.03); }
+  .brand { font-family: "Chakra Petch", sans-serif; font-weight: 700; font-size: 14px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--text); }
+  .brand b { color: var(--accent); }
+  .sub { font-size: 10px; letter-spacing: 0.05em; color: var(--text-dim); text-transform: uppercase; }
+  #collapse { font-family: "Chakra Petch", sans-serif; background: var(--track); color: var(--text-dim); border: 1px solid var(--edge); border-radius: 6px; width: 26px; height: 22px; font-size: 13px; cursor: pointer; flex: none; }
+  #collapse:hover { color: var(--accent); border-color: var(--accent-deep); }
+  #panelBody { overflow-y: auto; padding: 0 0 4px; }
+  #panel.collapsed #panelBody, #panel.collapsed .actions { display: none; }
+  .demo select { width: 100%; font: inherit; font-size: 11px; color: var(--text); background: var(--track); border: 1px solid var(--edge); border-radius: 6px; padding: 7px 8px; margin-bottom: 10px; }
+  details.adv summary { cursor: pointer; font-family: "Chakra Petch", sans-serif; font-size: 10px; font-weight: 600; letter-spacing: 0.18em; text-transform: uppercase; color: var(--text-dim); margin-bottom: 10px; list-style: none; }
+  details.adv summary::before { content: "▸ "; } details.adv[open] summary::before { content: "▾ "; }
+  details.adv summary:hover { color: var(--accent); }
+  details.adv .toggles { margin: 4px 0 10px; }
+  .readouts { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1px; background: var(--edge); border-bottom: 1px solid var(--edge); }
+  .readout { background: var(--panel); padding: 9px 12px; }
+  .readout .k { font-size: 9px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--text-dim); }
+  .readout .v { font-size: 14px; font-weight: 600; color: var(--text); font-variant-numeric: tabular-nums; margin-top: 2px; }
+  .readout .v.state-move { color: var(--accent); }
+  .readout .v.state-idle { color: var(--text-dim); }
+  .group { padding: 12px 16px 6px; }
+  .group + .group { border-top: 1px solid rgba(44,58,66,0.5); }
+  .group h3 { font-family: "Chakra Petch", sans-serif; font-size: 10px; font-weight: 600; letter-spacing: 0.18em; text-transform: uppercase; color: var(--accent); margin-bottom: 10px; opacity: 0.9; }
+  .ctrl { margin-bottom: 13px; }
+  .ctrl .row { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 5px; }
+  .ctrl label { font-size: 11px; color: var(--text); }
+  .ctrl .num { font-size: 11px; font-weight: 600; color: var(--accent); font-variant-numeric: tabular-nums; }
+  .ctrl .hint { font-size: 9.5px; color: var(--text-dim); margin-top: 4px; line-height: 1.35; }
+  input[type=range] { -webkit-appearance: none; appearance: none; width: 100%; height: 4px; border-radius: 3px; background: var(--track); outline: none; }
+  input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 15px; height: 15px; border-radius: 50%; background: var(--accent); border: 2px solid var(--void-2); box-shadow: 0 0 8px -1px rgba(230,161,60,0.55); cursor: pointer; }
+  input[type=range]::-moz-range-thumb { width: 13px; height: 13px; border-radius: 50%; background: var(--accent); border: 2px solid var(--void-2); cursor: pointer; }
+  .toggles { display: grid; grid-template-columns: 1fr 1fr; gap: 7px 10px; }
+  .tog { display: flex; align-items: center; gap: 7px; font-size: 10.5px; color: var(--text); cursor: pointer; user-select: none; }
+  .tog input { -webkit-appearance: none; appearance: none; width: 15px; height: 15px; border: 1px solid var(--edge); border-radius: 4px; background: var(--track); display: grid; place-content: center; cursor: pointer; flex: none; }
+  .tog input:checked { background: var(--accent); border-color: var(--accent); }
+  .tog input:checked::after { content: ""; width: 7px; height: 4px; border-left: 2px solid var(--void); border-bottom: 2px solid var(--void); transform: rotate(-45deg) translateY(-1px); }
+  .actions { display: flex; gap: 8px; padding: 12px 16px 14px; border-top: 1px solid var(--edge); }
+  button.act { flex: 1; font-family: "Chakra Petch", sans-serif; font-size: 10px; font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase; padding: 9px 8px; border-radius: 7px; border: 1px solid var(--edge); background: var(--track); color: var(--text); cursor: pointer; }
+  button.act:hover { border-color: var(--accent-deep); color: var(--accent); }
+  button.act.primary { background: var(--accent); color: #241606; border-color: var(--accent); }
+  #hint { position: fixed; left: 20px; bottom: 18px; font-size: 10.5px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-dim); z-index: 10; pointer-events: none; }
+  #hint b { color: var(--steel); font-weight: 500; }
+  #toast { position: fixed; left: 50%; bottom: 26px; transform: translateX(-50%) translateY(20px); background: var(--panel-2); border: 1px solid var(--accent-deep); color: var(--accent); font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; padding: 9px 16px; border-radius: 8px; opacity: 0; transition: opacity .2s, transform .2s; z-index: 20; pointer-events: none; }
+  #toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+  @media (prefers-reduced-motion: reduce) { #toast { transition: opacity .01s; } }
+  @media (max-width: 720px) { #panel { left: 12px; right: 12px; width: auto; top: 12px; } #hint { display: none; } }
+</style>
+
+
+<canvas id="stage"></canvas>
+
+<div id="panel">
+  <header>
+    <div>
+      <div class="brand">Tendril&nbsp;<b>Bench</b></div>
+      <div class="sub">omega-beam arm · core/tendril_core.js</div>
+    </div>
+    <button id="collapse" title="collapse panel">–</button>
+  </header>
+
+  <div id="panelBody">
+    <div class="readouts">
+      <div class="readout"><div class="k">state</div><div class="v" id="rState">—</div></div>
+      <div class="readout"><div class="k">corners</div><div class="v" id="rLinks">0</div></div>
+      <div class="readout"><div class="k">arm px</div><div class="v" id="rArm">0</div></div>
+    </div>
+
+    <div class="group">
+      <h3>Feel</h3>
+      <div id="mainCtrls"></div>
+    </div>
+
+    <div class="group">
+      <h3>Demo</h3>
+      <div class="demo">
+        <select id="demoSel">
+          <option value="">off — follow my mouse</option>
+          <option value="zigzag">zigzag</option>
+          <option value="circle">circle</option>
+          <option value="scribble">scribble</option>
+          <option value="tour">tour then rest</option>
+          <option value="straight">straight lines</option>
+          <option value="hairpin">sharp turns</option>
+        </select>
+      </div>
+    </div>
+
+    <details class="group adv">
+      <summary>Advanced</summary>
+      <div id="advCtrls"></div>
+      <div class="toggles">
+        <label class="tog"><input type="checkbox" id="tgGuide">path trace</label>
+        <label class="tog"><input type="checkbox" id="tgSkel">skeleton</label>
+        <label class="tog"><input type="checkbox" id="tgTarget">pointer marker</label>
+        <label class="tog"><input type="checkbox" id="tgPause">pause</label>
+        <label class="tog"><input type="checkbox" id="tgBenchArm" checked>bench arm</label>
+      </div>
+    </details>
+  </div>
+
+  <div class="actions">
+    <button class="act" id="btnReset">Reset</button>
+    <button class="act" id="btnDefaults">Defaults</button>
+    <button class="act primary" id="btnCopy">Copy values</button>
+  </div>
+</div>
+
+<div id="hint"><b>move</b> to steer &nbsp;·&nbsp; <b>click</b> to grip &nbsp;·&nbsp; <b>right-click</b> to flare open</div>
+<div id="toast"></div>
+
+<script src="core/tendril_core.js"></script>
+<script src="core/tendril_render.js"></script>
+<script>
+"use strict";
+// The model lives in core/tendril_core.js (shared with the KWin effect + node tests),
+// drawing in core/tendril_render.js. This page is only: input, sliders, demo autopilot.
+const model = TendrilCore.create();
+const P = model.P;
+const DEFAULTS = { ...P };
+const KEY = "tendrilBench3";
+try {
+  const saved = JSON.parse(localStorage.getItem(KEY) || "null");
+  if (saved && typeof saved === "object") for (const k in P) if (typeof saved[k] === "number") P[k] = saved[k];
+} catch (e) {}
+function persist() { try { localStorage.setItem(KEY, JSON.stringify(P)); } catch (e) {} pushLive(); }
+
+// [key, label, min, max, step, hint]  — MAIN is what you should need; ADV is everything else.
+const MAIN = [
+  ["bendTol",   "Bend sensitivity", 8, 120, 1,     "How far your path must curve before the arm takes a corner. Low = many small cuts, high = few big ones."],
+  ["reelHold",  "Hold",             0, 3, 0.05,    "Seconds a corner stays put before the base starts reeling it in."],
+  ["reelSpeed", "Reel speed",       60, 2000, 10,  "How fast the base reels corners in (px/s)."],
+  ["cinchTime", "Loop close time",  0.05, 2, 0.05, "Seconds a loop takes to pull tight when the arm crosses its own path."],
+  ["restCorners","Rest bends",      0, 4, 1,       "Bends from your path the arm keeps once reeled in. 0 = straightens out."],
+  ["armWidth",  "Thickness",        6, 34, 0.5,    ""],
+];
+const ADV = [
+  ["minSeg",    "Shortest leg (px)",        10, 160, 1],
+  ["minAngle",  "Sharpest bend kept (rad)", 0.5, 2.2, 0.01],
+  ["clearance", "Self-touch gap (× width)", 1, 5, 0.1],
+  ["maxJoints", "Max corners",              2, 30, 1],
+  ["armMax",    "Max length (× diagonal)",  0.6, 3, 0.05],
+  ["restSlack", "Rest max slack (× reach)", 1, 4, 0.05],
+  ["reelBoost", "Reel catch-up (/s)",       0, 10, 0.1],
+  ["jointTau",  "Corner snap-out (s)",      0.01, 0.3, 0.01],
+  ["clawScale", "Claw size",                0.5, 2.6, 0.05],
+  ["faceRate",  "Claw turn rate (rad/s)",   3, 60, 0.5],
+  ["fingers",   "Fingers",                  2, 4, 1],
+  ["openSpread","Finger spread",            0.25, 1.3, 0.02],
+  ["baseDelayMs","Base lag (ms)",           0, 1600, 10],
+  ["baseSpeed", "Base speed (px/frame)",    1, 40, 0.5],
+  ["baseDodge", "Base keeps away (px)",     0, 400, 10],
+];
+const decimals = st => (String(st).split(".")[1] || "").length;
+function buildCtrls(spec, host) {
+  for (const [key, label, min, max, step, hint] of spec) {
+    const row = document.createElement("div"); row.className = "ctrl"; row.dataset.p = key;
+    row.innerHTML = `<div class="row"><label>${label}</label><span class="num"></span></div>
+      <input type="range" min="${min}" max="${max}" step="${step}">${hint ? `<div class="hint">${hint}</div>` : ""}`;
+    host.appendChild(row);
+    const input = row.querySelector("input"), num = row.querySelector(".num");
+    input.addEventListener("input", () => { P[key] = parseFloat(input.value); num.textContent = P[key].toFixed(decimals(step)); persist(); });
+  }
+}
+buildCtrls(MAIN, document.getElementById("mainCtrls"));
+buildCtrls(ADV, document.getElementById("advCtrls"));
+function syncControls() {
+  document.querySelectorAll(".ctrl[data-p]").forEach((row) => {
+    const key = row.dataset.p, input = row.querySelector("input");
+    input.value = P[key]; row.querySelector(".num").textContent = (+P[key]).toFixed(decimals(input.step));
+  });
+}
+syncControls();
+
+// ---- live mode: when served by tools/tendril-tune, the sliders edit the INSTALLED
+// desktop cursor (~/.config/tendril-cursor/params.json, watched by the KWin effect).
+let live = false, liveEffect = false, postT = 0;
+function pushLive() {
+  if (!live) return;
+  clearTimeout(postT);
+  postT = setTimeout(() => {
+    const diff = {};
+    for (const k in P) if (P[k] !== DEFAULTS[k]) diff[k] = P[k];
+    fetch("/api/params", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(diff) })
+      .catch(() => toast("could not save to desktop cursor"));
+  }, 80);
+}
+async function initLive() {
+  // only tools/tendril-tune (127.0.0.1) has the /api; a static copy (GitHub Pages) is just the demo
+  if (!/^(127\.0\.0\.1|localhost|\[::1\])$/.test(location.hostname)) return;
+  try {
+    const r = await fetch("/api/params", { cache: "no-store" });
+    if (!r.ok || !(r.headers.get("content-type") || "").includes("json")) return;
+    const saved = await r.json();
+    live = true;
+    for (const k in DEFAULTS) P[k] = DEFAULTS[k];
+    for (const k in saved) if (k in P && typeof saved[k] === "number") P[k] = saved[k];
+    syncControls();
+    try { liveEffect = !!(await (await fetch("/api/status", { cache: "no-store" })).json()).effect; } catch (e) {}
+    const sub = document.querySelector("#panel .sub");
+    sub.textContent = liveEffect ? "LIVE · editing your desktop cursor" : "LIVE · saves to desktop cursor (effect is off)";
+    sub.style.color = "var(--accent)";
+    const tb = document.getElementById("tgBenchArm");
+    if (liveEffect) { tb.checked = false; dbg.benchArm = false; }   // the real cursor already draws over this page
+  } catch (e) {}
+}
+
+const dist = (ax, ay, bx, by) => Math.hypot(ax - bx, ay - by);
+const target = { x: 0, y: 0, seen: false };
+let leftPressed = false, rightPressed = false;
+const renderer = TendrilRender.create();
+
+const stage = document.getElementById("stage");
+const ctx = stage.getContext("2d");
+let dpr = 1;
+function resize() {
+  dpr = Math.min(window.devicePixelRatio || 1, 2);
+  const w = window.innerWidth, h = window.innerHeight;
+  stage.width = Math.round(w * dpr); stage.height = Math.round(h * dpr);
+  stage.style.width = w + "px"; stage.style.height = h + "px";
+}
+window.addEventListener("resize", resize);
+
+// ---- demo autopilot (also used for headless screenshots: ?demo=zigzag&t=3.2)
+const DEMOS = {
+  zigzag:   (t, W, H) => { const k = Math.floor(t / 0.7), u = (t % 0.7) / 0.7, e = u < 0.6 ? u / 0.6 : 1;
+                           const pt = i => ({ x: W * (0.2 + 0.6 * ((i % 6) / 5)), y: H * (i % 2 ? 0.3 : 0.62) });
+                           const a = pt(k), b = pt(k + 1); return { x: a.x + (b.x - a.x) * e, y: a.y + (b.y - a.y) * e }; },
+  circle:   (t, W, H) => ({ x: W / 2 + W * 0.2 * Math.cos(t * 2.2), y: H / 2 + H * 0.28 * Math.sin(t * 2.2) }),
+  scribble: (t, W, H) => ({ x: W / 2 + W * 0.31 * Math.sin(t * 5.3) * Math.cos(t * 1.1), y: H / 2 + H * 0.32 * Math.sin(t * 7.1 + 1) }),
+  straight: (t, W, H) => { const ph = (t % 3) / 3, e = ph < 0.4 ? ph / 0.4 : 1, back = Math.floor(t / 3) % 2;
+                           const a = { x: W * 0.15, y: H * 0.35 }, b = { x: W * 0.8, y: H * 0.55 };
+                           const [p, q] = back ? [b, a] : [a, b]; return { x: p.x + (q.x - p.x) * e, y: p.y + (q.y - p.y) * e }; },
+  hairpin:  (t, W, H) => { const pts = [[0.2, 0.3], [0.8, 0.36], [0.3, 0.46], [0.75, 0.6], [0.4, 0.25], [0.6, 0.7]];
+                           const T = 0.9, k = Math.floor(t / T) % pts.length, u = Math.min(1, (t % T) / (T * 0.7));
+                           const a = pts[k], b = pts[(k + 1) % pts.length];
+                           return { x: W * (a[0] + (b[0] - a[0]) * u), y: H * (a[1] + (b[1] - a[1]) * u) }; },
+  tour:     (t, W, H) => { t = t % 9; if (t > 3.2) t = 3.2;   // wind round the screen, then hold still and watch it reel in
+                           const pts = [[0.5, 0.75], [0.25, 0.6], [0.3, 0.25], [0.6, 0.2], [0.75, 0.5], [0.55, 0.45]];
+                           const s = t / 3.2 * (pts.length - 1), i = Math.min(pts.length - 2, Math.floor(s)), u = s - i;
+                           return { x: W * (pts[i][0] + (pts[i + 1][0] - pts[i][0]) * u), y: H * (pts[i][1] + (pts[i + 1][1] - pts[i][1]) * u) }; },
+};
+const qs = new URLSearchParams(location.search);
+let demo = qs.get("demo") || "", demoT = 0;
+const demoSel = document.getElementById("demoSel");
+demoSel.value = demo;
+demoSel.addEventListener("change", () => { demo = demoSel.value; demoT = 0; demoSel.blur(); if (!demo) resetModel(); });
+
+const dbg = { skel: false, guide: false, targetMark: false, paused: false, benchArm: true };
+function draw() {
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  const W = window.innerWidth, H = window.innerHeight;
+  ctx.clearRect(0, 0, W, H);
+  if (!model.chain.length) return;
+  if (dbg.benchArm) renderer.draw(ctx, model, target, W, H);
+  if (dbg.guide && model.guide.length > 1) {
+    ctx.save(); ctx.strokeStyle = "rgba(240,180,41,0.7)"; ctx.lineWidth = 1.5; ctx.setLineDash([4, 4]);
+    ctx.beginPath(); ctx.moveTo(model.guide[0].x, model.guide[0].y);
+    for (const p of model.guide) ctx.lineTo(p.x, p.y);
+    ctx.stroke(); ctx.restore();
+  }
+  if (dbg.skel) {
+    const v = model.verts;
+    ctx.save(); ctx.strokeStyle = "rgba(112,216,242,0.85)"; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(v[0].x, v[0].y); for (const p of v) ctx.lineTo(p.x, p.y); ctx.stroke();
+    for (const p of v) { ctx.fillStyle = p.k === "j" ? "#ff4d3d" : "#70d8f2"; ctx.beginPath(); ctx.arc(p.x, p.y, 3, 0, 7); ctx.fill(); }
+    ctx.restore();
+  }
+  if (dbg.targetMark && target.seen) {
+    ctx.save(); ctx.strokeStyle = "rgba(198,208,214,0.55)"; ctx.lineWidth = 1; ctx.beginPath();
+    ctx.moveTo(target.x - 10, target.y); ctx.lineTo(target.x + 10, target.y);
+    ctx.moveTo(target.x, target.y - 10); ctx.lineTo(target.x, target.y + 10);
+    ctx.stroke(); ctx.restore();
+  }
+}
+
+function stepModel(dt) {
+  const W = window.innerWidth, H = window.innerHeight;
+  if (demo && DEMOS[demo]) { demoT += dt; const p = DEMOS[demo](demoT, W, H); target.x = p.x; target.y = p.y; target.seen = true; }
+  model.leftPressed = leftPressed; model.rightPressed = rightPressed;
+  model.step(dt, target.x, target.y, W, H);
+}
+// headless capture hook: advance the sim deterministically to t seconds and draw
+window.benchAdvance = (secs) => { for (let i = 0; i < Math.round(secs * 60); i++) stepModel(1 / 60); draw(); updateReadouts(); };
+
+let lastT = performance.now(), fps = 0, fpsT = lastT, fpsN = 0;
+function frame(now) {
+  const dt = Math.min((now - lastT) / 1000, 0.25); lastT = now;
+  if (!dbg.paused && !qs.has("manual")) stepModel(dt);
+  draw();
+  fpsN++;
+  if (now - fpsT >= 500) { fps = Math.round(fpsN * 1000 / (now - fpsT)); fpsN = 0; fpsT = now; updateReadouts(); }
+  requestAnimationFrame(frame);
+}
+function updateReadouts() {
+  const st = document.getElementById("rState");
+  st.textContent = model.moving ? "MOVING" : (model.joints ? "REELING" : "REST");
+  st.className = "v state-" + (model.moving || model.joints ? "move" : "idle");
+  document.getElementById("rLinks").textContent = model.joints;
+  document.getElementById("rArm").textContent = Math.round(model.armLength());
+}
+
+function pointerFromEvent(e) { if (demo) return; target.x = e.clientX; target.y = e.clientY; target.seen = true; }
+window.addEventListener("pointermove", pointerFromEvent);
+window.addEventListener("pointerdown", (e) => {
+  if (e.target.closest && e.target.closest("#panel")) return;
+  pointerFromEvent(e);
+  if (e.button === 0) leftPressed = true;
+  if (e.button === 2) rightPressed = true;
+});
+window.addEventListener("pointerup", (e) => { if (e.button === 0) leftPressed = false; if (e.button === 2) rightPressed = false; });
+stage.addEventListener("contextmenu", (e) => e.preventDefault());
+
+function bindToggle(id, prop) { const el = document.getElementById(id); dbg[prop] = el.checked; el.addEventListener("change", () => { dbg[prop] = el.checked; }); }
+bindToggle("tgBenchArm", "benchArm"); bindToggle("tgSkel", "skel"); bindToggle("tgGuide", "guide"); bindToggle("tgTarget", "targetMark"); bindToggle("tgPause", "paused");
+
+function resetModel() { model.reset(target.x, target.y, window.innerWidth, window.innerHeight); }
+document.getElementById("btnReset").addEventListener("click", () => { resetModel(); toast("reset"); });
+document.getElementById("btnDefaults").addEventListener("click", () => {
+  for (const k in DEFAULTS) P[k] = DEFAULTS[k];
+  persist(); syncControls(); resetModel(); toast("defaults restored");
+});
+document.getElementById("collapse").addEventListener("click", (e) => {
+  const p = document.getElementById("panel");
+  p.classList.toggle("collapsed");
+  e.target.textContent = p.classList.contains("collapsed") ? "+" : "–";
+});
+document.getElementById("btnCopy").addEventListener("click", () => {
+  const changed = Object.keys(P).filter(k => P[k] !== DEFAULTS[k]);
+  const txt = "// --- Tendril Bench: values changed from core/tendril_core.js DEFAULTS ---\n" +
+    (changed.length ? changed.map(k => k.padEnd(14) + P[k] + "   // default " + DEFAULTS[k]).join("\n") : "// (none — all defaults)");
+  navigator.clipboard.writeText(txt).then(() => toast("values copied"),
+    () => { console.log(txt); toast("copy blocked — see console"); });
+});
+let toastT;
+function toast(msg) {
+  const el = document.getElementById("toast");
+  el.textContent = msg; el.classList.add("show");
+  clearTimeout(toastT); toastT = setTimeout(() => el.classList.remove("show"), 1600);
+}
+window.addEventListener("keydown", (e) => {
+  if (e.target.tagName === "INPUT" || e.target.tagName === "SELECT") return;
+  if (e.code === "Space") { e.preventDefault(); const t = document.getElementById("tgPause"); t.checked = !t.checked; dbg.paused = t.checked; toast(dbg.paused ? "paused" : "running"); }
+  if (e.key === "r") { resetModel(); toast("reset"); }
+});
+
+resize();
+target.x = window.innerWidth / 2;
+target.y = window.innerHeight * 0.6;
+window.addEventListener("load", resize);
+initLive();
+requestAnimationFrame(frame);
+</script>

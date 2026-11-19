@@ -1,0 +1,92 @@
+#!/usr/bin/env bash
+# tendril-cursor on|off|status — switch the Tendril KWin effect in as the real cursor, or back out.
+# "off" is the escape hatch: it restores the previous cursor theme FIRST, then disables the effect.
+# Also reachable blind from KRunner (Alt+Space): "Tendril Cursor Off".
+set -uo pipefail
+export WAYLAND_DISPLAY="${WAYLAND_DISPLAY:-wayland-0}"
+# XWayland too, so X11 apps get the theme change (plasma-apply-cursortheme runs xrdb)
+export DISPLAY="${DISPLAY:-:0}"
+if [ -z "${XAUTHORITY:-}" ]; then for f in /run/user/$(id -u)/xauth_*; do [ -e "$f" ] && export XAUTHORITY="$f"; done; fi
+Q=$(command -v qdbus-qt6 || command -v qdbus6 || echo /usr/lib64/qt6/bin/qdbus)
+STATE="$HOME/.config/tendril-cursor"; mkdir -p "$STATE"
+INVIS=TendrilInvisible
+PLUGDIR=$(qtpaths6 --query QT_INSTALL_PLUGINS 2>/dev/null || echo /usr/lib64/qt6/plugins)/kwin/effects/plugins
+# Each build installs under a unique id (tendril_<timestamp>); exactly one is installed.
+ID=$(basename "$(ls -t "$PLUGDIR"/tendril_*.so 2>/dev/null | head -1)" .so)
+[ -n "$ID" ] || { echo "Tendril effect is not installed (run install.sh)" >&2; [ "${1:-}" = off ] || exit 1; }
+loaded_ids() { $Q org.kde.KWin /Effects org.kde.kwin.Effects.loadedEffects 2>/dev/null | grep -E '^tendril'; }
+set_enabled() {   # $1 = true|false for the current id; every other tendril* key is dropped
+  for k in $(grep -oE '^tendril[A-Za-z0-9_]*Enabled' "$HOME/.config/kwinrc" 2>/dev/null); do
+    [ "$k" = "${ID}Enabled" ] || kwriteconfig6 --file kwinrc --group Plugins --key "$k" --delete
+  done
+  [ -n "$ID" ] && kwriteconfig6 --file kwinrc --group Plugins --key "${ID}Enabled" "$1"
+}
+cur_theme() { kreadconfig6 --file kcminputrc --group Mouse --key cursorTheme; }
+xres() { echo "Xcursor.theme: $1" | xrdb -merge 2>/dev/null || true; }   # X11 apps (apply skips this when unchanged)
+loaded() { $Q org.kde.KWin /Effects org.kde.kwin.Effects.isEffectLoaded "$ID" 2>/dev/null; }
+
+# Load the effect, then make sure the desktop is still there: compare a screenshot
+# from before and after. The arm covers well under 10% of the screen; if most of
+# the screen changed (e.g. went black) unload at once.
+safe_load() {
+  local d; d=$(mktemp -d); trap 'rm -rf "$d"' RETURN
+  spectacle -b -n -f -o "$d/before.png" >/dev/null 2>&1
+  $Q org.kde.KWin /Effects org.kde.kwin.Effects.loadEffect "$ID" >/dev/null
+  sleep 1
+  if [ "$(loaded)" != "true" ]; then echo "Tendril effect did not load." >&2; return 1; fi
+  spectacle -b -n -f -o "$d/after.png" >/dev/null 2>&1
+  if [ -s "$d/before.png" ] && [ -s "$d/after.png" ]; then
+    # fraction of pixels that changed by more than 12%
+    local frac
+    frac=$(magick "$d/before.png" "$d/after.png" -compose difference -composite -colorspace gray \
+           -threshold 12% -format '%[fx:mean]' info: 2>/dev/null)
+    echo "safety check: $(awk -v f="${frac:-0}" 'BEGIN{printf "%.1f", 100*f}')% of the screen changed" >&2
+    if awk -v f="${frac:-0}" 'BEGIN{exit !(f > 0.35)}'; then
+      $Q org.kde.KWin /Effects org.kde.kwin.Effects.unloadEffect "$ID" >/dev/null
+      echo "Safety check failed: the desktop changed too much when the effect loaded. Unloaded." >&2
+      return 1
+    fi
+  else
+    echo "(could not take screenshots for the safety check)" >&2
+  fi
+  return 0
+}
+
+case "${1:-status}" in
+  try)
+    safe_load && echo "Tendril effect loaded on top of your normal cursor (tendril-cursor off to remove)."
+    ;;
+  on)
+    t=$(cur_theme); [ "$t" != "$INVIS" ] && [ -n "$t" ] && echo "$t" > "$STATE/previous-theme"
+    if [ "$(loaded)" != "true" ] && ! safe_load; then
+      echo "Leaving your normal cursor in place." >&2; exit 1
+    fi
+    set_enabled true
+    plasma-apply-cursortheme "$INVIS" >/dev/null; xres "$INVIS"
+    echo "Tendril cursor ON (previous theme: $(cat "$STATE/previous-theme" 2>/dev/null))"
+    ;;
+  off)
+    prev=$(cat "$STATE/previous-theme" 2>/dev/null || echo breeze_cursors)
+    plasma-apply-cursortheme "$prev" >/dev/null; xres "$prev"
+    set_enabled false
+    # unload every tendril build KWin has loaded, whatever its id
+    for e in $(loaded_ids); do $Q org.kde.KWin /Effects org.kde.kwin.Effects.unloadEffect "$e" >/dev/null; done
+    echo "Tendril cursor OFF (cursor theme: $prev)"
+    ;;
+  tune)
+    # live settings: the bench edits ~/.config/tendril-cursor/params.json, which the effect watches
+    ROOT=$(cd "$(dirname "$(readlink -f "$0")")/.." && pwd)
+    if ! systemctl --user is-active --quiet tendril-tune; then
+      systemd-run --user --unit=tendril-tune --description="Tendril cursor live tuner" \
+        /usr/bin/python3 "$ROOT/tools/tendril-tune" >/dev/null
+      sleep 0.6
+    fi
+    url="http://127.0.0.1:${TENDRIL_TUNE_PORT:-8766}/tendril-bench.html"
+    xdg-open "$url" >/dev/null 2>&1 &
+    echo "Tuner: $url   (settings file: $STATE/params.json; stop: systemctl --user stop tendril-tune)"
+    ;;
+  status)
+    echo "effect $ID loaded: $(loaded)   enabled at login: $(kreadconfig6 --file kwinrc --group Plugins --key "${ID}Enabled")   cursor theme: $(cur_theme)"
+    ;;
+  *) echo "usage: tendril-cursor on|off|try|status|tune" >&2; exit 2 ;;
+esac

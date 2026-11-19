@@ -1,0 +1,15 @@
+{
+  "KPlugin": {
+    "Authors": [
+      {
+        "Name": "Tim"
+      }
+    ],
+    "Category": "Appearance",
+    "Description": "Procedural robotic tendril cursor, drawn as an overlay by KWin",
+    "EnabledByDefault": false,
+    "License": "MIT",
+    "Name": "Tendril Cursor",
+    "Version": "0.3.0"
+  }
+}

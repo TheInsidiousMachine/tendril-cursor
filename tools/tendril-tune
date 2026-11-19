@@ -1,0 +1,104 @@
+#!/usr/bin/env python3
+"""Live tuner for the installed Tendril cursor.
+
+Serves the bench (tendril-bench.html) on 127.0.0.1 and gives it a tiny API:
+  GET  /api/params   -> current overrides from ~/.config/tendril-cursor/params.json ({} = defaults)
+  POST /api/params   -> replace them (JSON object of name -> number)
+  GET  /api/status   -> {"effect": true/false}  (is the KWin effect loaded)
+The KWin effect watches params.json and applies changes immediately, so moving a
+bench slider changes the real desktop cursor live. No restart, no relogin.
+"""
+import json
+import os
+import re
+import subprocess
+import sys
+import tempfile
+from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parent.parent
+CFG = Path(os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config")) / "tendril-cursor" / "params.json"
+PORT = int(os.environ.get("TENDRIL_TUNE_PORT", "8766"))
+NAME = re.compile(r"^[A-Za-z][A-Za-z0-9]{0,40}$")
+
+
+def read_params():
+    try:
+        d = json.loads(CFG.read_text())
+        return {k: v for k, v in d.items() if NAME.match(k) and isinstance(v, (int, float))} if isinstance(d, dict) else {}
+    except (OSError, ValueError):
+        return {}
+
+
+def write_params(d):
+    CFG.parent.mkdir(parents=True, exist_ok=True)
+    fd, tmp = tempfile.mkstemp(dir=CFG.parent, prefix=".params.", suffix=".json")
+    with os.fdopen(fd, "w") as f:
+        json.dump(d, f, indent=2, sort_keys=True)
+    os.replace(tmp, CFG)          # atomic: the effect never reads a half-written file
+
+
+def effect_loaded():
+    env = dict(os.environ, WAYLAND_DISPLAY=os.environ.get("WAYLAND_DISPLAY", "wayland-0"))
+    try:
+        out = subprocess.run(["qdbus-qt6", "org.kde.KWin", "/Effects", "org.kde.kwin.Effects.loadedEffects"],
+                             capture_output=True, text=True, timeout=2, env=env).stdout.split()
+        return any(e.startswith("tendril") for e in out)
+    except (OSError, subprocess.SubprocessError):
+        return False
+
+
+class Handler(SimpleHTTPRequestHandler):
+    def __init__(self, *a, **kw):
+        super().__init__(*a, directory=str(ROOT), **kw)
+
+    def log_message(self, *a):
+        pass
+
+    def _json(self, code, obj):
+        body = json.dumps(obj).encode()
+        self.send_response(code)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Cache-Control", "no-store")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
+    def end_headers(self):
+        if not self.path.startswith("/api/"):
+            self.send_header("Cache-Control", "no-store")   # always serve the current bench/core
+        super().end_headers()
+
+    def do_GET(self):
+        if self.path == "/api/params":
+            return self._json(200, read_params())
+        if self.path == "/api/status":
+            return self._json(200, {"effect": effect_loaded(), "config": str(CFG)})
+        return super().do_GET()
+
+    def do_POST(self):
+        if self.path != "/api/params":
+            return self._json(404, {"error": "not found"})
+        try:
+            n = int(self.headers.get("Content-Length", "0"))
+            if n > 20000:
+                raise ValueError("too big")
+            d = json.loads(self.rfile.read(n))
+            if not isinstance(d, dict) or len(d) > 100:
+                raise ValueError("expected an object")
+            clean = {k: float(v) for k, v in d.items()
+                     if NAME.match(k) and isinstance(v, (int, float)) and v == v and abs(v) < 1e7}
+        except (ValueError, TypeError) as e:
+            return self._json(400, {"error": str(e)})
+        write_params(clean)
+        return self._json(200, {"ok": True, "saved": len(clean)})
+
+
+if __name__ == "__main__":
+    srv = ThreadingHTTPServer(("127.0.0.1", PORT), Handler)
+    print(f"tendril-tune: http://127.0.0.1:{PORT}/tendril-bench.html  (config: {CFG})", flush=True)
+    try:
+        srv.serve_forever()
+    except KeyboardInterrupt:
+        sys.exit(0)

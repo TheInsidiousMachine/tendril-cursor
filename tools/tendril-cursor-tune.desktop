@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=Tendril Cursor Settings
+Comment=Adjust the tendril cursor live (thickness, bends, reel speed...)
+Exec=$HOME/.local/bin/tendril-cursor tune
+Icon=preferences-desktop-cursors
+Terminal=false
+Categories=Settings;
+Keywords=tendril;cursor;mouse;settings;thickness;
